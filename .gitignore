@@ -1,0 +1,14 @@
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.moved-aside
+*.xcscmblueprint
+*.xccheckout
+
+# SwiftPM
+.build/
+Package.resolved
+
+# CocoaPods (使ってる場合)
+Pods/
