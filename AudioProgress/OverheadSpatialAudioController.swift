@@ -24,6 +24,7 @@ enum SpatialAudioError: Error {
 enum SpatialMotionMode: String, CaseIterable, Identifiable {
     case modeAFrontParabolaVerticalRise
     case modeBEarToEarFrontDip
+    case modeCNoSpatialChange
 
     var id: String { rawValue }
 
@@ -33,6 +34,8 @@ enum SpatialMotionMode: String, CaseIterable, Identifiable {
             return "Mode A"
         case .modeBEarToEarFrontDip:
             return "Mode B"
+        case .modeCNoSpatialChange:
+            return "No Motion"
         }
     }
 }
@@ -319,6 +322,8 @@ final class OverheadSpatialAudioController: ObservableObject {
             let zValue: Float = -radius * sin(angle)
             let yValue: Float = modeBYEar
             return AVAudio3DPoint(x: xValue, y: yValue, z: zValue)
+        case .modeCNoSpatialChange:
+            return AVAudio3DPoint(x: 0.0, y: heightY, z: 0.0)
         }
     }
 }
