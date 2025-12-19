@@ -50,9 +50,10 @@ struct ContentView: View {
                 controlsSection
                 progressInfoSection
                 positionVisualizationSection
-                Spacer()
+                Spacer().frame(height: 16.0)
             }
             .padding()
+            .padding(.bottom, 24.0)
         }
         .onAppear {
             do {
@@ -267,17 +268,18 @@ struct SpatialPositionVisualizer: View {
             let totalWidth: CGFloat = geometry.size.width
             let overheadWidth: CGFloat = totalWidth * 0.7
             let sideWidth: CGFloat = totalWidth * 0.3
-            HStack(alignment: .top, spacing: 12.0) {
-                OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters, pathPoints: pathPoints)
-                    .frame(width: overheadWidth, height: 340.0)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(12.0)
-                let circleDiameter: CGFloat = min(overheadWidth, 340.0) - 24.0
+            let height: CGFloat = 380.0
+            let circleDiameter: CGFloat = min(overheadWidth, height) * 0.8
+            HStack(alignment: .center, spacing: 12.0) {
+                OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters, pathPoints: pathPoints, circleDiameter: circleDiameter)
+                    .frame(width: overheadWidth, height: height)
                 SideHeightView(currentPosition: currentPosition, heightRangeMeters: heightRangeMeters, pathPoints: pathPoints, axisLength: circleDiameter)
-                    .frame(width: sideWidth, height: 340.0)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(12.0)
+                    .frame(width: sideWidth, height: height)
             }
+            .frame(maxWidth: .infinity)
+            .padding(12.0)
+            .background(Color(UIColor.secondarySystemBackground))
+            .cornerRadius(12.0)
         }
     }
 }
@@ -286,31 +288,19 @@ struct OverheadPositionView: View {
     let currentPosition: AVAudio3DPoint
     let rangeMeters: Float
     let pathPoints: [AVAudio3DPoint]
+    let circleDiameter: CGFloat
 
     var body: some View {
         GeometryReader { _ in
             Canvas { context, canvasSize in
                 let center: CGPoint = CGPoint(x: canvasSize.width / 2.0, y: canvasSize.height / 2.0)
-                let radius: CGFloat = min(canvasSize.width, canvasSize.height) / 2.0 - 12.0
+                let radius: CGFloat = circleDiameter / 2.0
                 drawGrid(in: canvasSize, radius: radius, center: center, context: &context)
                 drawLabels(radius: radius, center: center, context: &context)
                 drawPathSample(radius: radius, center: center, context: &context)
                 let displayPoint: CGPoint = mapPoint(position: currentPosition, radius: radius, center: center)
                 drawSourcePoint(displayPoint, context: &context)
             }
-            VStack {
-                HStack {
-                    Text("頭上からの視点")
-                        .font(.subheadline)
-                        .bold()
-                    Spacer()
-                    Text("y=\(String(format: "%.2f", currentPosition.y))m")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-            }
-            .padding(8.0)
         }
     }
 
@@ -336,7 +326,7 @@ struct OverheadPositionView: View {
     }
 
     private func drawLabels(radius: CGFloat, center: CGPoint, context: inout GraphicsContext) {
-        let offset: CGFloat = radius + 12.0
+        let offset: CGFloat = radius + 18.0
         context.draw(Text("Front"), at: CGPoint(x: center.x, y: center.y - offset))
         context.draw(Text("Back"), at: CGPoint(x: center.x, y: center.y + offset))
         context.draw(Text("Left"), at: CGPoint(x: center.x - offset, y: center.y))
@@ -387,23 +377,9 @@ struct SideHeightView: View {
                 let yValue: CGFloat = min(max(rawYValue, topY), groundY)
 
                 drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, zeroY: zeroLineY(minValue: bounds.min, maxValue: bounds.max, groundY: groundY, heightSpan: heightSpan), context: &context)
-                drawHeightLabels(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
-                drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, minValue: bounds.min, centerX: canvasSize.width / 2.0, width: canvasSize.width, context: &context)
+                drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, minValue: bounds.min, centerX: canvasSize.width / 2.0, context: &context)
                 drawCurrentMarker(yValue: yValue, centerX: canvasSize.width / 2.0, context: &context)
             }
-            VStack {
-                HStack {
-                    Text("横からの高さ視点")
-                        .font(.subheadline)
-                        .bold()
-                    Spacer()
-                    Text("y=\(String(format: "%.2f", currentPosition.y))m")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-            }
-            .padding(8.0)
         }
     }
 
@@ -421,18 +397,12 @@ struct SideHeightView: View {
         }
     }
 
-    private func drawHeightLabels(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
-        context.draw(Text("High").font(.caption), at: CGPoint(x: centerX, y: topY))
-        context.draw(Text("Low").font(.caption), at: CGPoint(x: centerX, y: groundY))
-    }
-
-    private func drawHeightPath(topY: CGFloat, groundY: CGFloat, metersPerPoint: CGFloat, minValue: Float, centerX: CGFloat, width: CGFloat, context: inout GraphicsContext) {
+    private func drawHeightPath(topY: CGFloat, groundY: CGFloat, metersPerPoint: CGFloat, minValue: Float, centerX: CGFloat, context: inout GraphicsContext) {
         guard pathPoints.count >= 2 else { return }
-        let horizontalOffset: CGFloat = width * 0.15
+        let fixedX: CGFloat = centerX
         var path: Path = Path()
         for (index, point) in pathPoints.enumerated() {
-            let progressPosition: CGFloat = CGFloat(index) / CGFloat(max(1, pathPoints.count - 1))
-            let xValue: CGFloat = centerX - horizontalOffset + progressPosition * horizontalOffset * 2.0
+            let xValue: CGFloat = fixedX
             let yValue: CGFloat = groundY - CGFloat(point.y - minValue) / metersPerPoint
             if index == 0 {
                 path.move(to: CGPoint(x: xValue, y: yValue))

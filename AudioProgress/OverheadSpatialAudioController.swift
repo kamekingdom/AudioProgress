@@ -55,7 +55,6 @@ final class OverheadSpatialAudioController: ObservableObject {
     private let modeBXLeft: Float = -1.0
     private let modeBZMax: Float = 0.8
     private let modeBYEar: Float = 0.0
-    private let modeBYDip: Float = 0.6
 
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var progress: Double = 0.0
@@ -314,7 +313,7 @@ final class OverheadSpatialAudioController: ObservableObject {
         case .modeBEarToEarFrontDip:
             let xValue: Float = modeBXRight + (modeBXLeft - modeBXRight) * progress
             let zValue: Float = -modeBZMax * 4.0 * progress * (1.0 - progress)
-            let yValue: Float = modeBYEar - modeBYDip * 4.0 * progress * (1.0 - progress)
+            let yValue: Float = modeBYEar
             return AVAudio3DPoint(x: xValue, y: yValue, z: zValue)
         }
     }
