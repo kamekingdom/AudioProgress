@@ -18,6 +18,29 @@ enum SpatialAudioError: Error {
     case engineStartFailed
     case fileUnavailable
     case scheduleFailed
+    case invalidDuration
+}
+
+enum SpatialMotionMode: String, CaseIterable, Identifiable {
+    case frontToBack
+    case leftToRight
+    case bottomToTop
+    case overheadOrbit
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .frontToBack:
+            return "Front → Back"
+        case .leftToRight:
+            return "Left → Right"
+        case .bottomToTop:
+            return "Bottom → Top"
+        case .overheadOrbit:
+            return "Overhead Orbit"
+        }
+    }
 }
 
 final class OverheadSpatialAudioController: ObservableObject {
@@ -28,7 +51,31 @@ final class OverheadSpatialAudioController: ObservableObject {
     private var heightY: Float = 1.2
     private var sourcePosition: AVAudio3DPoint = AVAudio3DPoint(x: 0.0, y: 1.2, z: 0.0)
     private var isPrepared: Bool = false
-    private var isPlaying: Bool = false
+    private var displayLink: CADisplayLink?
+    private var durationSecInternal: Double = 0.0
+    private var motionMode: SpatialMotionMode = .frontToBack
+    private let frontZ: Float = -1.0
+    private let backZ: Float = 1.0
+    private let leftX: Float = -1.0
+    private let rightX: Float = 1.0
+    private let bottomY: Float = 0.0
+    private let topY: Float = 1.2
+    private let orbitRadius: Float = 1.0
+
+    @Published private(set) var isPlaying: Bool = false
+    @Published private(set) var progress: Double = 0.0
+    @Published private(set) var durationSec: Double = 0.0
+
+    var isReadyForPlayback: Bool {
+        return audioFile != nil
+    }
+
+    var durationDescription: String {
+        guard durationSec > 0 else {
+            return "--"
+        }
+        return String(format: "%.2f s", durationSec)
+    }
 
     init() {
         let engine: AVAudioEngine = AVAudioEngine()
@@ -65,6 +112,12 @@ final class OverheadSpatialAudioController: ObservableObject {
             throw SpatialAudioError.fileUnavailable
         }
         audioFile = file
+        durationSecInternal = Double(file.length) / file.processingFormat.sampleRate
+        guard durationSecInternal > 0 else {
+            throw SpatialAudioError.invalidDuration
+        }
+        durationSec = durationSecInternal
+        progress = 0.0
         try configureEngineForAudioFile(file)
     }
 
@@ -86,11 +139,15 @@ final class OverheadSpatialAudioController: ObservableObject {
         let completionHandler: () -> Void = { [weak self] in
             DispatchQueue.main.async {
                 self?.isPlaying = false
+                self?.progress = 0.0
+                self?.stopMotionUpdates()
             }
         }
         playerNode.scheduleFile(file, at: nil, completionHandler: completionHandler)
         playerNode.play()
         isPlaying = true
+        startMotionUpdates()
+        updateProgressAndPosition()
     }
 
     func setSourcePosition(x: Float, z: Float) {
@@ -102,11 +159,20 @@ final class OverheadSpatialAudioController: ObservableObject {
         playerNode.stop()
         audioEngine.stop()
         isPlaying = false
+        progress = 0.0
+        stopMotionUpdates()
     }
 
     func reset() {
         stop()
         audioFile = nil
+        durationSecInternal = 0.0
+        durationSec = 0.0
+        progress = 0.0
+    }
+
+    func setMotionMode(_ mode: SpatialMotionMode) {
+        motionMode = mode
     }
 
     // MARK: - Private
@@ -175,6 +241,72 @@ final class OverheadSpatialAudioController: ObservableObject {
                     continuation.resume(throwing: SpatialAudioError.assetNotReadable)
                 }
             }
+        }
+    }
+
+    private func startMotionUpdates() {
+        stopMotionUpdates()
+        let link: CADisplayLink = CADisplayLink(target: self, selector: #selector(handleDisplayLink))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func stopMotionUpdates() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func handleDisplayLink() {
+        updateProgressAndPosition()
+    }
+
+    private func updateProgressAndPosition() {
+        guard isPlaying else {
+            return
+        }
+        guard durationSecInternal > 0.0 else {
+            progress = 0.0
+            return
+        }
+        guard let currentSec: Double = currentPlaybackTime() else {
+            return
+        }
+        let clampedProgress: Double = min(max(currentSec / durationSecInternal, 0.0), 1.0)
+        progress = clampedProgress
+        let position: AVAudio3DPoint = position(for: Float(clampedProgress))
+        sourcePosition = position
+        playerNode.position = position
+    }
+
+    private func currentPlaybackTime() -> Double? {
+        guard let nodeTime: AVAudioTime = playerNode.lastRenderTime,
+              let playerTime: AVAudioTime = playerNode.playerTime(forNodeTime: nodeTime) else {
+            return nil
+        }
+        let sampleTime: Double = Double(playerTime.sampleTime)
+        let rate: Double = playerTime.sampleRate
+        guard rate > 0 else {
+            return nil
+        }
+        return sampleTime / rate
+    }
+
+    private func position(for progress: Float) -> AVAudio3DPoint {
+        switch motionMode {
+        case .frontToBack:
+            let zValue: Float = frontZ + (backZ - frontZ) * progress
+            return AVAudio3DPoint(x: 0.0, y: heightY, z: zValue)
+        case .leftToRight:
+            let xValue: Float = leftX + (rightX - leftX) * progress
+            return AVAudio3DPoint(x: xValue, y: heightY, z: 0.0)
+        case .bottomToTop:
+            let yValue: Float = bottomY + (topY - bottomY) * progress
+            return AVAudio3DPoint(x: 0.0, y: yValue, z: 0.0)
+        case .overheadOrbit:
+            let theta: Float = Float(2.0 * Double.pi) * progress
+            let xValue: Float = orbitRadius * cos(theta)
+            let zValue: Float = orbitRadius * sin(theta)
+            return AVAudio3DPoint(x: xValue, y: heightY, z: zValue)
         }
     }
 }
