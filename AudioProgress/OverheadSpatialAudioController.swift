@@ -65,6 +65,7 @@ final class OverheadSpatialAudioController: ObservableObject {
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var progress: Double = 0.0
     @Published private(set) var durationSec: Double = 0.0
+    @Published private(set) var currentPosition: AVAudio3DPoint = AVAudio3DPoint(x: 0.0, y: 1.2, z: 0.0)
 
     var isReadyForPlayback: Bool {
         return audioFile != nil
@@ -118,6 +119,7 @@ final class OverheadSpatialAudioController: ObservableObject {
         }
         durationSec = durationSecInternal
         progress = 0.0
+        currentPosition = sourcePosition
         try configureEngineForAudioFile(file)
     }
 
@@ -160,6 +162,7 @@ final class OverheadSpatialAudioController: ObservableObject {
         audioEngine.stop()
         isPlaying = false
         progress = 0.0
+        currentPosition = sourcePosition
         stopMotionUpdates()
     }
 
@@ -169,6 +172,7 @@ final class OverheadSpatialAudioController: ObservableObject {
         durationSecInternal = 0.0
         durationSec = 0.0
         progress = 0.0
+        currentPosition = AVAudio3DPoint(x: 0.0, y: heightY, z: 0.0)
     }
 
     func setMotionMode(_ mode: SpatialMotionMode) {
@@ -276,6 +280,7 @@ final class OverheadSpatialAudioController: ObservableObject {
         let position: AVAudio3DPoint = position(for: Float(clampedProgress))
         sourcePosition = position
         playerNode.position = position
+        currentPosition = position
     }
 
     private func currentPlaybackTime() -> Double? {
