@@ -31,7 +31,7 @@ struct ContentView: View {
     private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
     private let heightY: Float = 1.2
     private let rangeMeters: Float = 2.2
-    private let heightRangeMeters: Float = 2.8
+    private let heightRangeMeters: Float = 3.0
 
     var body: some View {
         ScrollView {
@@ -263,15 +263,21 @@ struct SpatialPositionVisualizer: View {
     let pathPoints: [AVAudio3DPoint]
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12.0) {
-            OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters, pathPoints: pathPoints)
-                .frame(height: 320.0)
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(12.0)
-            SideHeightView(currentPosition: currentPosition, heightRangeMeters: heightRangeMeters, pathPoints: pathPoints)
-                .frame(height: 320.0)
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(12.0)
+        GeometryReader { geometry in
+            let totalWidth: CGFloat = geometry.size.width
+            let overheadWidth: CGFloat = totalWidth * 0.7
+            let sideWidth: CGFloat = totalWidth * 0.3
+            HStack(alignment: .top, spacing: 12.0) {
+                OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters, pathPoints: pathPoints)
+                    .frame(width: overheadWidth, height: 340.0)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(12.0)
+                let circleDiameter: CGFloat = min(overheadWidth, 340.0) - 24.0
+                SideHeightView(currentPosition: currentPosition, heightRangeMeters: heightRangeMeters, pathPoints: pathPoints, axisLength: circleDiameter)
+                    .frame(width: sideWidth, height: 340.0)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .cornerRadius(12.0)
+            }
         }
     }
 }
@@ -363,18 +369,22 @@ struct SideHeightView: View {
     let currentPosition: AVAudio3DPoint
     let heightRangeMeters: Float
     let pathPoints: [AVAudio3DPoint]
+    let axisLength: CGFloat
 
     var body: some View {
         GeometryReader { _ in
             Canvas { context, canvasSize in
-                let groundY: CGFloat = canvasSize.height - 16.0
-                let topY: CGFloat = 16.0
-                let heightSpan: CGFloat = max(0.1, groundY - topY)
+                let axisHeight: CGFloat = min(axisLength, canvasSize.height - 24.0)
+                let verticalPadding: CGFloat = max(12.0, (canvasSize.height - axisHeight) / 2.0)
+                let topY: CGFloat = verticalPadding
+                let groundY: CGFloat = verticalPadding + axisHeight
+                let heightSpan: CGFloat = max(0.1, axisHeight)
                 let bounds: (min: Float, max: Float) = computeVerticalRange()
                 let spanMeters: CGFloat = CGFloat(bounds.max - bounds.min)
                 let metersPerPoint: CGFloat = spanMeters / heightSpan
 
-                let yValue: CGFloat = groundY - CGFloat((currentPosition.y - bounds.min)) / metersPerPoint
+                let rawYValue: CGFloat = groundY - CGFloat((currentPosition.y - bounds.min)) / metersPerPoint
+                let yValue: CGFloat = min(max(rawYValue, topY), groundY)
 
                 drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, zeroY: zeroLineY(minValue: bounds.min, maxValue: bounds.max, groundY: groundY, heightSpan: heightSpan), context: &context)
                 drawHeightLabels(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
@@ -434,8 +444,10 @@ struct SideHeightView: View {
     }
 
     private func computeVerticalRange() -> (min: Float, max: Float) {
-        var minValue: Float = min(currentPosition.y, 0.0)
-        var maxValue: Float = max(currentPosition.y, 0.0)
+        let defaultMin: Float = -heightRangeMeters / 2.0
+        let defaultMax: Float = heightRangeMeters / 2.0
+        var minValue: Float = min(currentPosition.y, defaultMin)
+        var maxValue: Float = max(currentPosition.y, defaultMax)
         for point in pathPoints {
             minValue = min(minValue, point.y)
             maxValue = max(maxValue, point.y)
