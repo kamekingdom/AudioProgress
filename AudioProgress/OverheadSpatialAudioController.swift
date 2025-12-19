@@ -26,6 +26,8 @@ enum SpatialMotionMode: String, CaseIterable, Identifiable {
     case leftToRight
     case bottomToTop
     case overheadOrbit
+    case modeAFrontParabolaVerticalRise
+    case modeBEarToEarFrontDip
 
     var id: String { rawValue }
 
@@ -39,6 +41,10 @@ enum SpatialMotionMode: String, CaseIterable, Identifiable {
             return "Bottom → Top"
         case .overheadOrbit:
             return "Overhead Orbit"
+        case .modeAFrontParabolaVerticalRise:
+            return "Mode A: Front Parabola + Vertical Rise"
+        case .modeBEarToEarFrontDip:
+            return "Mode B: Ear → Ear with Front Dip"
         }
     }
 }
@@ -61,6 +67,14 @@ final class OverheadSpatialAudioController: ObservableObject {
     private let bottomY: Float = 0.0
     private let topY: Float = 1.2
     private let orbitRadius: Float = 1.0
+    private let modeAYStart: Float = -0.6
+    private let modeAYEnd: Float = 1.2
+    private let modeAZMax: Float = 0.8
+    private let modeBXRight: Float = 1.0
+    private let modeBXLeft: Float = -1.0
+    private let modeBZMax: Float = 0.8
+    private let modeBYEar: Float = 0.0
+    private let modeBYDip: Float = 0.6
 
     @Published private(set) var isPlaying: Bool = false
     @Published private(set) var progress: Double = 0.0
@@ -312,6 +326,15 @@ final class OverheadSpatialAudioController: ObservableObject {
             let xValue: Float = orbitRadius * cos(theta)
             let zValue: Float = orbitRadius * sin(theta)
             return AVAudio3DPoint(x: xValue, y: heightY, z: zValue)
+        case .modeAFrontParabolaVerticalRise:
+            let yValue: Float = modeAYStart + (modeAYEnd - modeAYStart) * progress
+            let zValue: Float = -modeAZMax * 4.0 * progress * (1.0 - progress)
+            return AVAudio3DPoint(x: 0.0, y: yValue, z: zValue)
+        case .modeBEarToEarFrontDip:
+            let xValue: Float = modeBXRight + (modeBXLeft - modeBXRight) * progress
+            let zValue: Float = -modeBZMax * 4.0 * progress * (1.0 - progress)
+            let yValue: Float = modeBYEar - modeBYDip * 4.0 * progress * (1.0 - progress)
+            return AVAudio3DPoint(x: xValue, y: yValue, z: zValue)
         }
     }
 }

@@ -31,7 +31,7 @@ struct ContentView: View {
     private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
     private let heightY: Float = 1.2
     private let rangeMeters: Float = 1.5
-    private let heightRangeMeters: Float = 1.5
+    private let heightRangeMeters: Float = 2.0
 
     var body: some View {
         ScrollView {
