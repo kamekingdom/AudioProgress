@@ -55,39 +55,6 @@ struct DebugSpatialAudioView: View {
     @State private var isImporterPresented: Bool = false
     @State private var status: PlaybackStatus = .ready
     @State private var errorMessage: String? = nil
-    @State private var displayPoint: CGPoint? = nil
-    @State private var selectedFileName: String? = nil
-
-    private let titleText: String = "Overhead Spatial Audio Pad"
-    private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
-    private let heightY: Float = 1.2
-    private let rangeMeters: Float = 1.5
-
-    var body: some View {
-        NavigationView {
-            List {
-                Section(header: Text("デバッグ")) {
-                    NavigationLink(destination: DebugSpatialAudioView()) {
-                        VStack(alignment: .leading, spacing: 4.0) {
-                            Text("頭上平面オーディオパッド")
-                                .font(.headline)
-                            Text("再生進捗で空間移動するデバッグ用デモ")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("メニュー")
-        }
-    }
-}
-
-struct DebugSpatialAudioView: View {
-    @StateObject private var controller: OverheadSpatialAudioController = OverheadSpatialAudioController()
-    @State private var isImporterPresented: Bool = false
-    @State private var status: PlaybackStatus = .ready
-    @State private var errorMessage: String? = nil
     @State private var selectedFileName: String? = nil
     @State private var selectedMode: SpatialMotionMode = .frontToBack
 
