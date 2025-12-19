@@ -27,8 +27,8 @@ struct ContentView: View {
     @State private var selectedFileName: String? = nil
     @State private var selectedMode: SpatialMotionMode = .frontToBack
 
-    private let titleText: String = "頭上平面オーディオパッド"
-    private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
+    private let titleText: String = "Audio Progress"
+    private let subtitleText: String = "AirPodsなどのヘッドホンでテスト推奨"
     private let heightY: Float = 1.2
     private let rangeMeters: Float = 1.5
     private let heightRangeMeters: Float = 2.0
