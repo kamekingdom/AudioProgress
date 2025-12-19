@@ -166,7 +166,7 @@ struct ContentView: View {
                 heightRangeMeters: heightRangeMeters,
                 pathPoints: controller.pathSamplePoints(for: selectedMode)
             )
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 420.0)
         }
         .padding()
         .background(Color(UIColor.secondarySystemBackground))
