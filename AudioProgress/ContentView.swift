@@ -376,7 +376,7 @@ struct SideHeightView: View {
 
                 let yValue: CGFloat = groundY - CGFloat((currentPosition.y - bounds.min)) / metersPerPoint
 
-                drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, zeroY: zeroLineY(min: bounds.min, max: bounds.max, groundY: groundY, heightSpan: heightSpan), context: &context)
+                drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, zeroY: zeroLineY(minValue: bounds.min, maxValue: bounds.max, groundY: groundY, heightSpan: heightSpan), context: &context)
                 drawHeightLabels(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
                 drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, minValue: bounds.min, centerX: canvasSize.width / 2.0, width: canvasSize.width, context: &context)
                 drawCurrentMarker(yValue: yValue, centerX: canvasSize.width / 2.0, context: &context)
@@ -449,10 +449,10 @@ struct SideHeightView: View {
         return (minValue, maxValue)
     }
 
-    private func zeroLineY(min: Float, max: Float, groundY: CGFloat, heightSpan: CGFloat) -> CGFloat? {
-        guard max - min > 0 else { return nil }
-        let zeroRatio: CGFloat = CGFloat(0.0 - min) / CGFloat(max - min)
-        let clampedRatio: CGFloat = max(0.0, min(1.0, zeroRatio))
+    private func zeroLineY(minValue: Float, maxValue: Float, groundY: CGFloat, heightSpan: CGFloat) -> CGFloat? {
+        guard maxValue - minValue > 0 else { return nil }
+        let zeroRatio: CGFloat = CGFloat(0.0 - minValue) / CGFloat(maxValue - minValue)
+        let clampedRatio: CGFloat = max(0.0, Swift.min(1.0, zeroRatio))
         return groundY - clampedRatio * heightSpan
     }
 
