@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 enum PlaybackStatus: String {
     case ready = "準備完了"
     case selecting = "ファイル選択"
+    case exporting = "変換中"
     case fileSelected = "ファイル選択済み"
     case playing = "再生中"
     case stopped = "停止"
@@ -39,8 +40,8 @@ struct ContentView: View {
                 .font(.footnote)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-            statusView
-            controlButtons
+            statusSectionView
+            controlButtonsView
             SpatialPadView(
                 heightLabel: "Overhead plane y=\(heightY)m",
                 rangeMeters: rangeMeters,
@@ -72,31 +73,11 @@ struct ContentView: View {
             allowedContentTypes: [UTType.mp3, UTType.audio],
             allowsMultipleSelection: false
         ) { result in
-            handleFileImport(result: result)
+            processFileImport(result: result)
         }
     }
 
-    private var statusView: some View {
-        VStack(spacing: 8.0) {
-            Text("ステータス: \(status.rawValue)")
-                .font(.headline)
-            if let message: String = errorMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-        }
-        .padding()
-        .fileImporter(
-            isPresented: $isImporterPresented,
-            allowedContentTypes: [UTType.mpeg4Movie],
-            allowsMultipleSelection: false
-        ) { result in
-            handleFileImport(result: result)
-        }
-    }
-
-    private var statusView: some View {
+    private var statusSectionView: some View {
         VStack(spacing: 8.0) {
             Text("ステータス: \(status.rawValue)")
                 .font(.headline)
@@ -109,66 +90,7 @@ struct ContentView: View {
         .padding()
     }
 
-    private var controlButtons: some View {
-        HStack(spacing: 16.0) {
-            Button(action: {
-                errorMessage = nil
-                isImporterPresented = true
-            }) {
-                Text("MP4を選択して再生")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(status == .exporting)
-
-            Button(action: {
-                controller.stopPlayback()
-                status = .stopped
-            }) {
-                Text("停止")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
-    }
-
-    private func handleFileImport(result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url: URL = urls.first else {
-                status = .error
-                errorMessage = "ファイルが選択されませんでした"
-                return
-            }
-            Task {
-                await playSelectedFile(url: url)
-            }
-        case .failure(let error):
-            status = .error
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func playSelectedFile(url: URL) async {
-        let canAccess: Bool = url.startAccessingSecurityScopedResource()
-        defer {
-            if canAccess {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        status = .exporting
-        do {
-            try await controller.playSpatialAudio(from: url)
-            status = .playing
-            errorMessage = nil
-        } catch {
-            status = .error
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private var controlButtons: some View {
+    private var controlButtonsView: some View {
         HStack(spacing: 16.0) {
             Button(action: {
                 errorMessage = nil
@@ -191,7 +113,7 @@ struct ContentView: View {
         }
     }
 
-    private func handleFileImport(result: Result<[URL], Error>) {
+    private func processFileImport(result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url: URL = urls.first else {
@@ -215,7 +137,7 @@ struct ContentView: View {
                 url.stopAccessingSecurityScopedResource()
             }
         }
-        status = .selecting
+        status = .exporting
         do {
             try await controller.loadAudio(from: url)
             status = .fileSelected
