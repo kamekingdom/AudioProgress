@@ -25,13 +25,13 @@ struct ContentView: View {
     @State private var status: PlaybackStatus = .ready
     @State private var errorMessage: String? = nil
     @State private var selectedFileName: String? = nil
-    @State private var selectedMode: SpatialMotionMode = .frontToBack
+    @State private var selectedMode: SpatialMotionMode = .modeAFrontParabolaVerticalRise
 
-    private let titleText: String = "Audio Progress"
-    private let subtitleText: String = "AirPodsなどのヘッドホンでテスト推奨"
+    private let titleText: String = "頭上平面オーディオパッド"
+    private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
     private let heightY: Float = 1.2
-    private let rangeMeters: Float = 1.5
-    private let heightRangeMeters: Float = 2.0
+    private let rangeMeters: Float = 1.6
+    private let heightRangeMeters: Float = 2.5
 
     var body: some View {
         ScrollView {
@@ -186,8 +186,13 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12.0) {
             Text("現在位置の可視化")
                 .font(.headline)
-            SpatialPositionVisualizer(currentPosition: controller.currentPosition, rangeMeters: rangeMeters, heightRangeMeters: heightRangeMeters)
-                .frame(maxWidth: .infinity)
+            SpatialPositionVisualizer(
+                currentPosition: controller.currentPosition,
+                rangeMeters: rangeMeters,
+                heightRangeMeters: heightRangeMeters,
+                pathPoints: controller.pathSamplePoints(for: selectedMode)
+            )
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -210,8 +215,8 @@ struct ContentView: View {
         status = .ready
         selectedFileName = nil
         errorMessage = nil
-        selectedMode = .frontToBack
-        controller.setMotionMode(.frontToBack)
+        selectedMode = .modeAFrontParabolaVerticalRise
+        controller.setMotionMode(.modeAFrontParabolaVerticalRise)
     }
 
     private func handleFileImporterResult(result: Result<[URL], Error>) {
@@ -255,15 +260,16 @@ struct SpatialPositionVisualizer: View {
     let currentPosition: AVAudio3DPoint
     let rangeMeters: Float
     let heightRangeMeters: Float
+    let pathPoints: [AVAudio3DPoint]
 
     var body: some View {
-        VStack(spacing: 12.0) {
-            OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters)
-                .frame(height: 220.0)
+        HStack(alignment: .top, spacing: 12.0) {
+            OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters, pathPoints: pathPoints)
+                .frame(height: 280.0)
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(12.0)
-            SideHeightView(currentPosition: currentPosition, heightRangeMeters: heightRangeMeters)
-                .frame(height: 140.0)
+            SideHeightView(currentPosition: currentPosition, heightRangeMeters: heightRangeMeters, pathPoints: pathPoints)
+                .frame(height: 280.0)
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(12.0)
         }
@@ -273,15 +279,16 @@ struct SpatialPositionVisualizer: View {
 struct OverheadPositionView: View {
     let currentPosition: AVAudio3DPoint
     let rangeMeters: Float
+    let pathPoints: [AVAudio3DPoint]
 
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             Canvas { context, canvasSize in
                 let center: CGPoint = CGPoint(x: canvasSize.width / 2.0, y: canvasSize.height / 2.0)
                 let radius: CGFloat = min(canvasSize.width, canvasSize.height) / 2.0 - 12.0
                 drawGrid(in: canvasSize, radius: radius, center: center, context: &context)
-                drawHead(center: center, context: &context)
                 drawLabels(radius: radius, center: center, context: &context)
+                drawPathSample(radius: radius, center: center, context: &context)
                 let displayPoint: CGPoint = mapPoint(position: currentPosition, radius: radius, center: center)
                 drawSourcePoint(displayPoint, context: &context)
             }
@@ -322,19 +329,26 @@ struct OverheadPositionView: View {
         context.stroke(axesPath, with: .color(.gray.opacity(0.4)), lineWidth: 1.0)
     }
 
-    private func drawHead(center: CGPoint, context: inout GraphicsContext) {
-        let headRadius: CGFloat = 12.0
-        let headRect: CGRect = CGRect(x: center.x - headRadius, y: center.y - headRadius, width: headRadius * 2.0, height: headRadius * 2.0)
-        let headPath: Path = Path(ellipseIn: headRect)
-        context.fill(headPath, with: .color(.blue.opacity(0.6)))
-    }
-
     private func drawLabels(radius: CGFloat, center: CGPoint, context: inout GraphicsContext) {
         let offset: CGFloat = radius + 12.0
         context.draw(Text("Front"), at: CGPoint(x: center.x, y: center.y - offset))
         context.draw(Text("Back"), at: CGPoint(x: center.x, y: center.y + offset))
         context.draw(Text("Left"), at: CGPoint(x: center.x - offset, y: center.y))
         context.draw(Text("Right"), at: CGPoint(x: center.x + offset, y: center.y))
+    }
+
+    private func drawPathSample(radius: CGFloat, center: CGPoint, context: inout GraphicsContext) {
+        guard pathPoints.count >= 2 else { return }
+        var path: Path = Path()
+        for (index, point) in pathPoints.enumerated() {
+            let cgPoint: CGPoint = mapPoint(position: point, radius: radius, center: center)
+            if index == 0 {
+                path.move(to: cgPoint)
+            } else {
+                path.addLine(to: cgPoint)
+            }
+        }
+        context.stroke(path, with: .color(.red.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6.0, 6.0]))
     }
 
     private func drawSourcePoint(_ point: CGPoint, context: inout GraphicsContext) {
@@ -348,6 +362,7 @@ struct OverheadPositionView: View {
 struct SideHeightView: View {
     let currentPosition: AVAudio3DPoint
     let heightRangeMeters: Float
+    let pathPoints: [AVAudio3DPoint]
 
     var body: some View {
         GeometryReader { _ in
@@ -358,25 +373,10 @@ struct SideHeightView: View {
                 let metersPerPoint: CGFloat = CGFloat(heightRangeMeters) / heightSpan
                 let yValue: CGFloat = groundY - CGFloat(currentPosition.y) / metersPerPoint
 
-                var axisPath: Path = Path()
-                axisPath.move(to: CGPoint(x: canvasSize.width / 2.0, y: groundY))
-                axisPath.addLine(to: CGPoint(x: canvasSize.width / 2.0, y: topY))
-                context.stroke(axisPath, with: .color(.gray.opacity(0.5)), lineWidth: 1.0)
-
-                let headRadius: CGFloat = 10.0
-                let headRect: CGRect = CGRect(x: canvasSize.width / 2.0 - headRadius, y: groundY - headRadius * 2.0, width: headRadius * 2.0, height: headRadius * 2.0)
-                let headPath: Path = Path(ellipseIn: headRect)
-                context.fill(headPath, with: .color(.blue.opacity(0.6)))
-
-                let sourceRadius: CGFloat = 8.0
-                let sourceRect: CGRect = CGRect(x: canvasSize.width / 2.0 + 30.0, y: yValue - sourceRadius, width: sourceRadius * 2.0, height: sourceRadius * 2.0)
-                let sourcePath: Path = Path(ellipseIn: sourceRect)
-                context.fill(sourcePath, with: .color(.red))
-
-                let linePathRect: CGRect = CGRect(x: canvasSize.width / 2.0, y: yValue, width: 30.0, height: 0.5)
-                var linePath: Path = Path()
-                linePath.addRect(linePathRect)
-                context.fill(linePath, with: .color(.red.opacity(0.6)))
+                drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
+                drawHeightLabels(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
+                drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, centerX: canvasSize.width / 2.0, width: canvasSize.width, context: &context)
+                drawCurrentMarker(yValue: yValue, centerX: canvasSize.width / 2.0, context: &context)
             }
             VStack {
                 HStack {
@@ -392,6 +392,42 @@ struct SideHeightView: View {
             }
             .padding(8.0)
         }
+    }
+
+    private func drawVerticalAxis(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
+        var axisPath: Path = Path()
+        axisPath.move(to: CGPoint(x: centerX, y: groundY))
+        axisPath.addLine(to: CGPoint(x: centerX, y: topY))
+        context.stroke(axisPath, with: .color(.gray.opacity(0.5)), lineWidth: 1.0)
+    }
+
+    private func drawHeightLabels(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
+        context.draw(Text("High").font(.caption), at: CGPoint(x: centerX, y: topY))
+        context.draw(Text("Low").font(.caption), at: CGPoint(x: centerX, y: groundY))
+    }
+
+    private func drawHeightPath(topY: CGFloat, groundY: CGFloat, metersPerPoint: CGFloat, centerX: CGFloat, width: CGFloat, context: inout GraphicsContext) {
+        guard pathPoints.count >= 2 else { return }
+        let horizontalOffset: CGFloat = width * 0.15
+        var path: Path = Path()
+        for (index, point) in pathPoints.enumerated() {
+            let progressPosition: CGFloat = CGFloat(index) / CGFloat(max(1, pathPoints.count - 1))
+            let xValue: CGFloat = centerX - horizontalOffset + progressPosition * horizontalOffset * 2.0
+            let yValue: CGFloat = groundY - CGFloat(point.y) / metersPerPoint
+            if index == 0 {
+                path.move(to: CGPoint(x: xValue, y: yValue))
+            } else {
+                path.addLine(to: CGPoint(x: xValue, y: yValue))
+            }
+        }
+        context.stroke(path, with: .color(.red.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6.0, 6.0]))
+    }
+
+    private func drawCurrentMarker(yValue: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
+        let sourceRadius: CGFloat = 10.0
+        let sourceRect: CGRect = CGRect(x: centerX - sourceRadius, y: yValue - sourceRadius, width: sourceRadius * 2.0, height: sourceRadius * 2.0)
+        let sourcePath: Path = Path(ellipseIn: sourceRect)
+        context.fill(sourcePath, with: .color(.red))
     }
 }
 

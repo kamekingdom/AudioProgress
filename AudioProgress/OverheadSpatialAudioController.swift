@@ -22,10 +22,6 @@ enum SpatialAudioError: Error {
 }
 
 enum SpatialMotionMode: String, CaseIterable, Identifiable {
-    case frontToBack
-    case leftToRight
-    case bottomToTop
-    case overheadOrbit
     case modeAFrontParabolaVerticalRise
     case modeBEarToEarFrontDip
 
@@ -33,18 +29,10 @@ enum SpatialMotionMode: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .frontToBack:
-            return "Front → Back"
-        case .leftToRight:
-            return "Left → Right"
-        case .bottomToTop:
-            return "Bottom → Top"
-        case .overheadOrbit:
-            return "Overhead Orbit"
         case .modeAFrontParabolaVerticalRise:
-            return "Mode A: Front Parabola + Vertical Rise"
+            return "Mode A"
         case .modeBEarToEarFrontDip:
-            return "Mode B: Ear → Ear with Front Dip"
+            return "Mode B"
         }
     }
 }
@@ -59,14 +47,7 @@ final class OverheadSpatialAudioController: ObservableObject {
     private var isPrepared: Bool = false
     private var displayLink: CADisplayLink?
     private var durationSecInternal: Double = 0.0
-    private var motionMode: SpatialMotionMode = .frontToBack
-    private let frontZ: Float = -1.0
-    private let backZ: Float = 1.0
-    private let leftX: Float = -1.0
-    private let rightX: Float = 1.0
-    private let bottomY: Float = 0.0
-    private let topY: Float = 1.2
-    private let orbitRadius: Float = 1.0
+    private var motionMode: SpatialMotionMode = .modeAFrontParabolaVerticalRise
     private let modeAYStart: Float = -0.6
     private let modeAYEnd: Float = 1.2
     private let modeAZMax: Float = 0.8
@@ -193,6 +174,16 @@ final class OverheadSpatialAudioController: ObservableObject {
         motionMode = mode
     }
 
+    func pathSamplePoints(for mode: SpatialMotionMode, sampleCount: Int = 80) -> [AVAudio3DPoint] {
+        let clampedCount: Int = max(2, sampleCount)
+        var points: [AVAudio3DPoint] = []
+        for index in 0..<clampedCount {
+            let progressValue: Float = Float(index) / Float(clampedCount - 1)
+            points.append(position(for: progressValue, modeOverride: mode))
+        }
+        return points
+    }
+
     // MARK: - Private
 
     private func configureAudioSession() throws {
@@ -311,21 +302,11 @@ final class OverheadSpatialAudioController: ObservableObject {
     }
 
     private func position(for progress: Float) -> AVAudio3DPoint {
-        switch motionMode {
-        case .frontToBack:
-            let zValue: Float = frontZ + (backZ - frontZ) * progress
-            return AVAudio3DPoint(x: 0.0, y: heightY, z: zValue)
-        case .leftToRight:
-            let xValue: Float = leftX + (rightX - leftX) * progress
-            return AVAudio3DPoint(x: xValue, y: heightY, z: 0.0)
-        case .bottomToTop:
-            let yValue: Float = bottomY + (topY - bottomY) * progress
-            return AVAudio3DPoint(x: 0.0, y: yValue, z: 0.0)
-        case .overheadOrbit:
-            let theta: Float = Float(2.0 * Double.pi) * progress
-            let xValue: Float = orbitRadius * cos(theta)
-            let zValue: Float = orbitRadius * sin(theta)
-            return AVAudio3DPoint(x: xValue, y: heightY, z: zValue)
+        return position(for: progress, modeOverride: motionMode)
+    }
+
+    private func position(for progress: Float, modeOverride: SpatialMotionMode) -> AVAudio3DPoint {
+        switch modeOverride {
         case .modeAFrontParabolaVerticalRise:
             let yValue: Float = modeAYStart + (modeAYEnd - modeAYStart) * progress
             let zValue: Float = -modeAZMax * 4.0 * progress * (1.0 - progress)
