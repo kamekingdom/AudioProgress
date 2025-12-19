@@ -168,6 +168,9 @@ struct ContentView: View {
             )
             .frame(maxWidth: .infinity)
         }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(10.0)
     }
 
     private func togglePlaybackAction() {
