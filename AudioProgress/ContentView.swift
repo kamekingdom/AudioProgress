@@ -27,8 +27,6 @@ struct ContentView: View {
     @State private var selectedFileName: String? = nil
     @State private var selectedMode: SpatialMotionMode = .modeAFrontParabolaVerticalRise
 
-    private let titleText: String = "頭上平面オーディオパッド"
-    private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
     private let heightY: Float = 1.2
     private let rangeMeters: Float = 2.2
     private let heightRangeMeters: Float = 3.0
@@ -36,15 +34,6 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16.0) {
-                Text(titleText)
-                    .font(.title)
-                    .bold()
-                    .padding(.top, 16.0)
-                Text(subtitleText)
-                    .font(.footnote)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                statusSection
                 selectionSection
                 modePickerSection
                 controlsSection
@@ -78,22 +67,6 @@ struct ContentView: View {
         ) { result in
             handleFileImporterResult(result: result)
         }
-    }
-
-    private var statusSection: some View {
-        VStack(spacing: 8.0) {
-            Text("ステータス: \(status.rawValue)")
-                .font(.headline)
-            if let message: String = errorMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-            Text("Duration: \(controller.durationDescription)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding()
     }
 
     private var selectionSection: some View {
@@ -195,6 +168,9 @@ struct ContentView: View {
             )
             .frame(maxWidth: .infinity)
         }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(10.0)
     }
 
     private func togglePlaybackAction() {
@@ -327,10 +303,15 @@ struct OverheadPositionView: View {
 
     private func drawLabels(radius: CGFloat, center: CGPoint, context: inout GraphicsContext) {
         let offset: CGFloat = radius + 18.0
-        context.draw(Text("Front"), at: CGPoint(x: center.x, y: center.y - offset))
-        context.draw(Text("Back"), at: CGPoint(x: center.x, y: center.y + offset))
-        context.draw(Text("Left"), at: CGPoint(x: center.x - offset, y: center.y))
-        context.draw(Text("Right"), at: CGPoint(x: center.x + offset, y: center.y))
+        let labelText: (String) -> Text = { text in
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.primary)
+        }
+        context.draw(labelText("Front"), at: CGPoint(x: center.x, y: center.y - offset))
+        context.draw(labelText("Back"), at: CGPoint(x: center.x, y: center.y + offset))
+        context.draw(labelText("Left"), at: CGPoint(x: center.x - offset, y: center.y))
+        context.draw(labelText("Right"), at: CGPoint(x: center.x + offset, y: center.y))
     }
 
     private func drawPathSample(radius: CGFloat, center: CGPoint, context: inout GraphicsContext) {
@@ -379,6 +360,7 @@ struct SideHeightView: View {
                 drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, zeroY: zeroLineY(minValue: bounds.min, maxValue: bounds.max, groundY: groundY, heightSpan: heightSpan), context: &context)
                 drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, minValue: bounds.min, centerX: canvasSize.width / 2.0, context: &context)
                 drawCurrentMarker(yValue: yValue, centerX: canvasSize.width / 2.0, context: &context)
+                drawHighLowLabels(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
             }
         }
     }
@@ -443,6 +425,16 @@ struct SideHeightView: View {
         let sourceRect: CGRect = CGRect(x: centerX - sourceRadius, y: yValue - sourceRadius, width: sourceRadius * 2.0, height: sourceRadius * 2.0)
         let sourcePath: Path = Path(ellipseIn: sourceRect)
         context.fill(sourcePath, with: .color(.red))
+    }
+
+    private func drawHighLowLabels(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
+        let labelText: (String) -> Text = { text in
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.primary)
+        }
+        context.draw(labelText("High"), at: CGPoint(x: centerX, y: topY - 8.0))
+        context.draw(labelText("Low"), at: CGPoint(x: centerX, y: groundY + 12.0))
     }
 }
 
