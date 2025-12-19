@@ -30,8 +30,8 @@ struct ContentView: View {
     private let titleText: String = "頭上平面オーディオパッド"
     private let subtitleText: String = "実機＋AirPodsなどのヘッドホンでテスト推奨（シミュレータでは空間感が評価しにくいです）"
     private let heightY: Float = 1.2
-    private let rangeMeters: Float = 1.6
-    private let heightRangeMeters: Float = 2.5
+    private let rangeMeters: Float = 2.2
+    private let heightRangeMeters: Float = 2.8
 
     var body: some View {
         ScrollView {
@@ -265,11 +265,11 @@ struct SpatialPositionVisualizer: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12.0) {
             OverheadPositionView(currentPosition: currentPosition, rangeMeters: rangeMeters, pathPoints: pathPoints)
-                .frame(height: 280.0)
+                .frame(height: 320.0)
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(12.0)
             SideHeightView(currentPosition: currentPosition, heightRangeMeters: heightRangeMeters, pathPoints: pathPoints)
-                .frame(height: 280.0)
+                .frame(height: 320.0)
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(12.0)
         }
@@ -370,12 +370,15 @@ struct SideHeightView: View {
                 let groundY: CGFloat = canvasSize.height - 16.0
                 let topY: CGFloat = 16.0
                 let heightSpan: CGFloat = max(0.1, groundY - topY)
-                let metersPerPoint: CGFloat = CGFloat(heightRangeMeters) / heightSpan
-                let yValue: CGFloat = groundY - CGFloat(currentPosition.y) / metersPerPoint
+                let bounds: (min: Float, max: Float) = computeVerticalRange()
+                let spanMeters: CGFloat = CGFloat(bounds.max - bounds.min)
+                let metersPerPoint: CGFloat = spanMeters / heightSpan
 
-                drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
+                let yValue: CGFloat = groundY - CGFloat((currentPosition.y - bounds.min)) / metersPerPoint
+
+                drawVerticalAxis(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, zeroY: zeroLineY(min: bounds.min, max: bounds.max, groundY: groundY, heightSpan: heightSpan), context: &context)
                 drawHeightLabels(topY: topY, groundY: groundY, centerX: canvasSize.width / 2.0, context: &context)
-                drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, centerX: canvasSize.width / 2.0, width: canvasSize.width, context: &context)
+                drawHeightPath(topY: topY, groundY: groundY, metersPerPoint: metersPerPoint, minValue: bounds.min, centerX: canvasSize.width / 2.0, width: canvasSize.width, context: &context)
                 drawCurrentMarker(yValue: yValue, centerX: canvasSize.width / 2.0, context: &context)
             }
             VStack {
@@ -394,11 +397,18 @@ struct SideHeightView: View {
         }
     }
 
-    private func drawVerticalAxis(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
+    private func drawVerticalAxis(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, zeroY: CGFloat?, context: inout GraphicsContext) {
         var axisPath: Path = Path()
         axisPath.move(to: CGPoint(x: centerX, y: groundY))
         axisPath.addLine(to: CGPoint(x: centerX, y: topY))
         context.stroke(axisPath, with: .color(.gray.opacity(0.5)), lineWidth: 1.0)
+
+        if let zeroY: CGFloat = zeroY {
+            var zeroPath: Path = Path()
+            zeroPath.move(to: CGPoint(x: centerX - 30.0, y: zeroY))
+            zeroPath.addLine(to: CGPoint(x: centerX + 30.0, y: zeroY))
+            context.stroke(zeroPath, with: .color(.gray.opacity(0.6)), style: StrokeStyle(lineWidth: 1.0, dash: [4.0, 4.0]))
+        }
     }
 
     private func drawHeightLabels(topY: CGFloat, groundY: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
@@ -406,14 +416,14 @@ struct SideHeightView: View {
         context.draw(Text("Low").font(.caption), at: CGPoint(x: centerX, y: groundY))
     }
 
-    private func drawHeightPath(topY: CGFloat, groundY: CGFloat, metersPerPoint: CGFloat, centerX: CGFloat, width: CGFloat, context: inout GraphicsContext) {
+    private func drawHeightPath(topY: CGFloat, groundY: CGFloat, metersPerPoint: CGFloat, minValue: Float, centerX: CGFloat, width: CGFloat, context: inout GraphicsContext) {
         guard pathPoints.count >= 2 else { return }
         let horizontalOffset: CGFloat = width * 0.15
         var path: Path = Path()
         for (index, point) in pathPoints.enumerated() {
             let progressPosition: CGFloat = CGFloat(index) / CGFloat(max(1, pathPoints.count - 1))
             let xValue: CGFloat = centerX - horizontalOffset + progressPosition * horizontalOffset * 2.0
-            let yValue: CGFloat = groundY - CGFloat(point.y) / metersPerPoint
+            let yValue: CGFloat = groundY - CGFloat(point.y - minValue) / metersPerPoint
             if index == 0 {
                 path.move(to: CGPoint(x: xValue, y: yValue))
             } else {
@@ -421,6 +431,29 @@ struct SideHeightView: View {
             }
         }
         context.stroke(path, with: .color(.red.opacity(0.6)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6.0, 6.0]))
+    }
+
+    private func computeVerticalRange() -> (min: Float, max: Float) {
+        var minValue: Float = min(currentPosition.y, 0.0)
+        var maxValue: Float = max(currentPosition.y, 0.0)
+        for point in pathPoints {
+            minValue = min(minValue, point.y)
+            maxValue = max(maxValue, point.y)
+        }
+        let padding: Float = 0.2
+        minValue -= padding
+        maxValue += padding
+        if maxValue - minValue < 0.1 {
+            maxValue = minValue + 0.1
+        }
+        return (minValue, maxValue)
+    }
+
+    private func zeroLineY(min: Float, max: Float, groundY: CGFloat, heightSpan: CGFloat) -> CGFloat? {
+        guard max - min > 0 else { return nil }
+        let zeroRatio: CGFloat = CGFloat(0.0 - min) / CGFloat(max - min)
+        let clampedRatio: CGFloat = max(0.0, min(1.0, zeroRatio))
+        return groundY - clampedRatio * heightSpan
     }
 
     private func drawCurrentMarker(yValue: CGFloat, centerX: CGFloat, context: inout GraphicsContext) {
