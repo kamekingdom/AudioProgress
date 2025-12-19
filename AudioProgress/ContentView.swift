@@ -310,8 +310,8 @@ struct OverheadPositionView: View {
         }
         context.draw(labelText("Front"), at: CGPoint(x: center.x, y: center.y - offset))
         context.draw(labelText("Back"), at: CGPoint(x: center.x, y: center.y + offset))
-        context.draw(labelText("Left"), at: CGPoint(x: center.x - offset, y: center.y))
-        context.draw(labelText("Right"), at: CGPoint(x: center.x + offset, y: center.y))
+        context.draw(labelText("L"), at: CGPoint(x: center.x - offset, y: center.y))
+        context.draw(labelText("R"), at: CGPoint(x: center.x + offset, y: center.y))
     }
 
     private func drawPathSample(radius: CGFloat, center: CGPoint, context: inout GraphicsContext) {
