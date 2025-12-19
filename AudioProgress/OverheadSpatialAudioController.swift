@@ -10,6 +10,7 @@ import AVFoundation
 import UIKit
 
 enum SpatialAudioError: Error {
+    case notPrepared
     case assetNotReadable
     case exportSessionUnavailable
     case exportFailed(message: String)
@@ -23,12 +24,11 @@ final class OverheadSpatialAudioController: ObservableObject {
     private let audioEngine: AVAudioEngine
     private let environmentNode: AVAudioEnvironmentNode
     private let playerNode: AVAudioPlayerNode
-    private var displayLink: CADisplayLink?
-    private var sweepStartTime: CFTimeInterval?
-    private let motionPeriod: Double = 3.0
-    private let heightY: Float = 1.2
-    private let frontZ: Float = -1.0
-    private let backZ: Float = 1.0
+    private var audioFile: AVAudioFile?
+    private var heightY: Float = 1.2
+    private var sourcePosition: AVAudio3DPoint = AVAudio3DPoint(x: 0.0, y: 1.2, z: 0.0)
+    private var isPrepared: Bool = false
+    private var isPlaying: Bool = false
 
     init() {
         let engine: AVAudioEngine = AVAudioEngine()
@@ -43,19 +43,61 @@ final class OverheadSpatialAudioController: ObservableObject {
         playerNode = player
     }
 
-    func playSpatialAudio(from sourceURL: URL) async throws {
-        stopPlayback()
-        let m4aURL: URL = try await exportAudio(from: sourceURL)
+    func prepare(heightY: Float) throws {
+        stop()
+        self.heightY = heightY
+        sourcePosition = AVAudio3DPoint(x: 0.0, y: heightY, z: 0.0)
         try configureAudioSession()
-        try setupEngineWithFile(at: m4aURL)
-        startMotion()
+        attachNodesIfNeeded()
+        isPrepared = true
     }
 
-    func stopPlayback() {
-        stopMotion()
+    func loadAudio(from url: URL) async throws {
+        guard isPrepared else {
+            throw SpatialAudioError.notPrepared
+        }
+        stop()
+        let m4aURL: URL = try await exportAudio(from: url)
+        let file: AVAudioFile
+        do {
+            file = try AVAudioFile(forReading: m4aURL)
+        } catch {
+            throw SpatialAudioError.fileUnavailable
+        }
+        audioFile = file
+        try configureEngineForAudioFile(file)
+    }
+
+    func playIfNeeded() {
+        guard let file: AVAudioFile = audioFile else {
+            return
+        }
+        if isPlaying {
+            return
+        }
+        playerNode.stop()
+        let completionHandler: () -> Void = { [weak self] in
+            DispatchQueue.main.async {
+                self?.isPlaying = false
+            }
+        }
+        playerNode.scheduleFile(file, at: nil, completionHandler: completionHandler)
+        playerNode.play()
+        isPlaying = true
+    }
+
+    func setSourcePosition(x: Float, z: Float) {
+        sourcePosition = AVAudio3DPoint(x: x, y: heightY, z: z)
+        playerNode.position = sourcePosition
+    }
+
+    func stop() {
         playerNode.stop()
         audioEngine.stop()
+        isPlaying = false
     }
+
+    // MARK: - Private
 
     private func configureAudioSession() throws {
         let session: AVAudioSession = AVAudioSession.sharedInstance()
@@ -64,6 +106,37 @@ final class OverheadSpatialAudioController: ObservableObject {
             try session.setActive(true, options: [])
         } catch {
             throw SpatialAudioError.audioSessionUnavailable
+        }
+    }
+
+    private func attachNodesIfNeeded() {
+        if !audioEngine.attachedNodes.contains(playerNode) {
+            audioEngine.attach(playerNode)
+        }
+        if !audioEngine.attachedNodes.contains(environmentNode) {
+            audioEngine.attach(environmentNode)
+        }
+    }
+
+    private func configureEngineForAudioFile(_ audioFile: AVAudioFile) throws {
+        audioEngine.stop()
+        audioEngine.reset()
+        attachNodesIfNeeded()
+
+        let format: AVAudioFormat = audioFile.processingFormat
+        audioEngine.disconnectNodeOutput(playerNode)
+        audioEngine.disconnectNodeOutput(environmentNode)
+        audioEngine.connect(playerNode, to: environmentNode, format: format)
+        audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: nil)
+
+        environmentNode.listenerPosition = AVAudio3DPoint(x: 0.0, y: 0.0, z: 0.0)
+        playerNode.renderingAlgorithm = .HRTF
+        playerNode.position = sourcePosition
+
+        do {
+            try audioEngine.start()
+        } catch {
+            throw SpatialAudioError.engineStartFailed
         }
     }
 
@@ -91,77 +164,5 @@ final class OverheadSpatialAudioController: ObservableObject {
                 }
             }
         }
-    }
-
-    private func setupEngineWithFile(at url: URL) throws {
-        let audioFile: AVAudioFile
-        do {
-            audioFile = try AVAudioFile(forReading: url)
-        } catch {
-            throw SpatialAudioError.fileUnavailable
-        }
-
-        if !audioEngine.attachedNodes.contains(playerNode) {
-            audioEngine.attach(playerNode)
-        }
-        if !audioEngine.attachedNodes.contains(environmentNode) {
-            audioEngine.attach(environmentNode)
-        }
-
-        audioEngine.disconnectNodeOutput(playerNode)
-        audioEngine.disconnectNodeOutput(environmentNode)
-        audioEngine.connect(playerNode, to: environmentNode, format: audioFile.processingFormat)
-        audioEngine.connect(environmentNode, to: audioEngine.mainMixerNode, format: nil)
-
-        audioEngine.stop()
-        audioEngine.reset()
-
-        playerNode.stop()
-        playerNode.renderingAlgorithm = .HRTF
-        playerNode.position = AVAudio3DPoint(x: 0.0, y: heightY, z: frontZ)
-        environmentNode.listenerPosition = AVAudio3DPoint(x: 0.0, y: 0.0, z: 0.0)
-
-        do {
-            try audioEngine.start()
-        } catch {
-            throw SpatialAudioError.engineStartFailed
-        }
-
-        let completionHandler: () -> Void = { [weak self] in
-            DispatchQueue.main.async {
-                self?.stopPlayback()
-            }
-        }
-        playerNode.scheduleFile(audioFile, at: nil, completionHandler: completionHandler)
-        playerNode.play()
-    }
-
-    private func startMotion() {
-        stopMotion()
-        sweepStartTime = CACurrentMediaTime()
-        let link: CADisplayLink = CADisplayLink(target: self, selector: #selector(updatePosition(_:)))
-        link.preferredFramesPerSecond = 60
-        link.add(to: .main, forMode: .default)
-        displayLink = link
-    }
-
-    private func stopMotion() {
-        displayLink?.invalidate()
-        displayLink = nil
-        sweepStartTime = nil
-    }
-
-    @objc private func updatePosition(_ link: CADisplayLink) {
-        guard let startTime: CFTimeInterval = sweepStartTime else {
-            sweepStartTime = link.timestamp
-            return
-        }
-        let elapsed: Double = link.timestamp - startTime
-        let cycle: Double = elapsed.truncatingRemainder(dividingBy: motionPeriod)
-        let ratio: Double = cycle / motionPeriod
-        let zDelta: Float = backZ - frontZ
-        let zPosition: Float = frontZ + Float(ratio) * zDelta
-        let position: AVAudio3DPoint = AVAudio3DPoint(x: 0.0, y: heightY, z: zPosition)
-        playerNode.position = position
     }
 }
