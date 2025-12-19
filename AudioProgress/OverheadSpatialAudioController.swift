@@ -50,10 +50,8 @@ final class OverheadSpatialAudioController: ObservableObject {
     private var motionMode: SpatialMotionMode = .modeAFrontParabolaVerticalRise
     private let modeAYStart: Float = -0.6
     private let modeAYEnd: Float = 1.2
-    private let modeAZMax: Float = 0.8
     private let modeBXRight: Float = 1.0
     private let modeBXLeft: Float = -1.0
-    private let modeBZMax: Float = 0.8
     private let modeBYEar: Float = 0.0
 
     @Published private(set) var isPlaying: Bool = false
@@ -307,12 +305,18 @@ final class OverheadSpatialAudioController: ObservableObject {
     private func position(for progress: Float, modeOverride: SpatialMotionMode) -> AVAudio3DPoint {
         switch modeOverride {
         case .modeAFrontParabolaVerticalRise:
-            let yValue: Float = modeAYStart + (modeAYEnd - modeAYStart) * progress
-            let zValue: Float = -modeAZMax * 4.0 * progress * (1.0 - progress)
+            let radius: Float = (modeAYEnd - modeAYStart) / 2.0
+            let centerY: Float = (modeAYEnd + modeAYStart) / 2.0
+            let angle: Float = Float.pi * (1.0 - progress)
+            let yValue: Float = centerY + radius * cos(angle)
+            let zValue: Float = -radius * sin(angle)
             return AVAudio3DPoint(x: 0.0, y: yValue, z: zValue)
         case .modeBEarToEarFrontDip:
-            let xValue: Float = modeBXRight + (modeBXLeft - modeBXRight) * progress
-            let zValue: Float = -modeBZMax * 4.0 * progress * (1.0 - progress)
+            let radius: Float = (modeBXRight - modeBXLeft) / 2.0
+            let centerX: Float = (modeBXRight + modeBXLeft) / 2.0
+            let angle: Float = Float.pi * progress
+            let xValue: Float = centerX + radius * cos(angle)
+            let zValue: Float = -radius * sin(angle)
             let yValue: Float = modeBYEar
             return AVAudio3DPoint(x: xValue, y: yValue, z: zValue)
         }
