@@ -75,6 +75,13 @@ final class OverheadSpatialAudioController: ObservableObject {
         if isPlaying {
             return
         }
+        if !audioEngine.isRunning {
+            do {
+                try audioEngine.start()
+            } catch {
+                return
+            }
+        }
         playerNode.stop()
         let completionHandler: () -> Void = { [weak self] in
             DispatchQueue.main.async {
@@ -95,6 +102,11 @@ final class OverheadSpatialAudioController: ObservableObject {
         playerNode.stop()
         audioEngine.stop()
         isPlaying = false
+    }
+
+    func reset() {
+        stop()
+        audioFile = nil
     }
 
     // MARK: - Private
