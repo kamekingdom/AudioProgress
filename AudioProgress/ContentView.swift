@@ -75,7 +75,7 @@ struct DebugSpatialAudioView: View {
                 .padding(.horizontal)
             statusSectionView
             selectionSectionView
-            controlButtonsView
+            controlsSectionView
             SpatialPadView(
                 heightLabel: "Overhead plane y=\(heightY)m",
                 rangeMeters: rangeMeters,
@@ -150,7 +150,7 @@ struct DebugSpatialAudioView: View {
         .cornerRadius(10.0)
     }
 
-    private var controlButtonsView: some View {
+    private var controlsSectionView: some View {
         HStack(spacing: 16.0) {
             Button(action: {
                 togglePlayback()
@@ -201,7 +201,7 @@ struct DebugSpatialAudioView: View {
                 return
             }
             Task {
-                await loadSelectedFile(url: url)
+                await performLoadSelectedFile(url: url)
             }
         case .failure(let error):
             status = .error
@@ -209,7 +209,7 @@ struct DebugSpatialAudioView: View {
         }
     }
 
-    private func loadSelectedFile(url: URL) async {
+    private func performLoadSelectedFile(url: URL) async {
         let canAccess: Bool = url.startAccessingSecurityScopedResource()
         defer {
             if canAccess {
@@ -223,65 +223,6 @@ struct DebugSpatialAudioView: View {
             displayPoint = nil
             errorMessage = nil
             selectedFileName = url.lastPathComponent
-        } catch {
-            status = .error
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private var controlButtonsView: some View {
-        HStack(spacing: 16.0) {
-            Button(action: {
-                errorMessage = nil
-                status = .selecting
-                isImporterPresented = true
-            }) {
-                Text("音源ファイルを選択")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button(action: {
-                controller.stop()
-                status = .stopped
-            }) {
-                Text("停止")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
-    }
-
-    private func processFileImport(result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url: URL = urls.first else {
-                status = .error
-                errorMessage = "ファイルが選択されませんでした"
-                return
-            }
-            Task {
-                await loadSelectedFile(url: url)
-            }
-        case .failure(let error):
-            status = .error
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func loadSelectedFile(url: URL) async {
-        let canAccess: Bool = url.startAccessingSecurityScopedResource()
-        defer {
-            if canAccess {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        status = .exporting
-        do {
-            try await controller.loadAudio(from: url)
-            status = .fileSelected
-            displayPoint = nil
-            errorMessage = nil
         } catch {
             status = .error
             errorMessage = error.localizedDescription
